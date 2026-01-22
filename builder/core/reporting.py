@@ -10,4 +10,5 @@ def format_build_summary(result: BuildResult) -> str:
         f"  Created files: {result.created_files}\n"
         f"  Skipped:       {result.skipped}\n"
         f"  Errors:        {result.errors}\n"
+        f"  Overwrite:     {'ON' if result.overwrite else 'OFF'}\n"
     )

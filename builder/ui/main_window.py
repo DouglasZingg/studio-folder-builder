@@ -27,7 +27,7 @@ from builder.core.builder import PlanBuilder
 from builder.core.reporting import format_build_summary
 from builder.util.parse_input import parse_sequences_and_shots
 from builder.models import PlanAction
-
+from builder.core.manifest import build_manifest, write_manifest
 
 @dataclass
 class UiState:
@@ -50,6 +50,7 @@ class MainWindow(QMainWindow):
 
         self._templates_dir = Path(__file__).resolve().parents[2] / "templates"
         self._loader = TemplateLoader(self._templates_dir)
+        self._last_sequences: dict[str, list[str]] = {}
 
         self._build_ui()
         self._wire_signals()
@@ -315,6 +316,24 @@ class MainWindow(QMainWindow):
         self._log(f"Building... (overwrite={'ON' if overwrite else 'OFF'})")
 
         result = builder.execute(self._last_plan)
+
+        # Write project-wide manifest
+        root_dir = self._state.root_dir
+        t = self._state.template
+        if root_dir and t:
+            project_root = root_dir / self._state.project_name
+            rec = build_manifest(
+                project_root=project_root,
+                template_name=t.name,
+                template_version=t.version,
+                template_raw=t.raw,
+                sequences=self._last_sequences,
+                result=result,
+            )
+            manifest_path = write_manifest(rec)
+            self._log(f"Manifest written: {manifest_path.as_posix()}")
+        else:
+            self._log("Manifest not written (missing root/template).")
 
         self._log("")
         self._log(format_build_summary(result))

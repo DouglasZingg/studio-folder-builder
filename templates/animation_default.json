@@ -1,0 +1,26 @@
+{
+  "name": "Animation Default",
+  "version": "1.0",
+  "project_folders": [
+    "assets",
+    "sequences",
+    "editorial",
+    "production",
+    "shots",
+    "tools",
+    "delivery"
+  ],
+  "shot_tree": {
+    "work": [ "maya", "houdini", "unreal", "nuke" ],
+    "publish": [ "usd", "caches", "images" ],
+    "renders": [ "playblasts" ],
+    "comp": [],
+    "reference": [],
+    "docs": [ "notes.md", "manifest.json" ]
+  },
+  "asset_tree": {
+    "characters": [ "model", "rig", "surfacing", "textures", "groom" ],
+    "props": [ "model", "surfacing", "textures" ],
+    "environments": [ "model", "surfacing", "textures" ]
+  }
+}

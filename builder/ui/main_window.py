@@ -25,9 +25,12 @@ from builder.core.template_loader import TemplateInfo, TemplateLoader, TemplateL
 from builder.core.planner import plan_shot_build
 from builder.core.builder import PlanBuilder
 from builder.core.reporting import format_build_summary
-from builder.util.parse_input import parse_sequences_and_shots
-from builder.models import PlanAction
 from builder.core.manifest import build_manifest, write_manifest
+from builder.core.template_preview import format_template_preview
+from builder.util.parse_input import parse_sequences_and_shots
+from builder.util.fs import open_in_file_explorer
+from builder.models import PlanAction
+
 
 @dataclass
 class UiState:
@@ -40,17 +43,17 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Studio Folder Builder")
-        self.resize(1020, 780)
+        self.resize(1120, 820)
 
         self._state = UiState()
         self._templates: list[TemplateInfo] = []
         self._last_load: TemplateLoadResult | None = None
 
         self._last_plan: list[PlanAction] = []
+        self._last_sequences: dict[str, list[str]] = {}
 
         self._templates_dir = Path(__file__).resolve().parents[2] / "templates"
         self._loader = TemplateLoader(self._templates_dir)
-        self._last_sequences: dict[str, list[str]] = {}
 
         self._build_ui()
         self._wire_signals()
@@ -64,6 +67,7 @@ class MainWindow(QMainWindow):
 
         root_layout = QVBoxLayout(central)
 
+        # ---- Job setup group
         inputs_group = QGroupBox("Job Setup")
         root_layout.addWidget(inputs_group)
 
@@ -88,6 +92,18 @@ class MainWindow(QMainWindow):
         template_row.addWidget(self.reload_templates_btn)
         inputs_layout.addRow("Template:", template_row)
 
+        # Profile quick buttons
+        profile_row = QHBoxLayout()
+        self.profile_vfx_btn = QPushButton("VFX")
+        self.profile_game_btn = QPushButton("Game")
+        self.profile_anim_btn = QPushButton("Animation")
+        profile_row.addWidget(QLabel("Quick Profiles:"))
+        profile_row.addWidget(self.profile_vfx_btn)
+        profile_row.addWidget(self.profile_game_btn)
+        profile_row.addWidget(self.profile_anim_btn)
+        profile_row.addStretch(1)
+        inputs_layout.addRow("", profile_row)
+
         # Template warnings
         warn_row = QHBoxLayout()
         self.template_warning_label = QLabel("")
@@ -99,24 +115,29 @@ class MainWindow(QMainWindow):
         warn_row.addWidget(self.show_template_errors_btn)
         inputs_layout.addRow("Templates:", warn_row)
 
-        # Project name
+        # Project name + open folder
+        proj_row = QHBoxLayout()
         self.project_edit = QLineEdit()
         self.project_edit.setPlaceholderText("MyShow")
-        inputs_layout.addRow("Project:", self.project_edit)
+        self.open_project_btn = QPushButton("Open Project Folder")
+        self.open_project_btn.setEnabled(False)
+        proj_row.addWidget(self.project_edit, 1)
+        proj_row.addWidget(self.open_project_btn)
+        inputs_layout.addRow("Project:", proj_row)
 
-        # Sequences/Shots input
+        # Sequences/Shots input + fill example
+        seq_row = QHBoxLayout()
         self.seq_shot_edit = QTextEdit()
         self.seq_shot_edit.setPlaceholderText(
-            "Sequences/Shots (examples):\n"
+            "Sequences/Shots examples:\n"
             "SQ010: SH010, SH020, SH030\n"
-            "SQ020: SH010\n\n"
-            "OR:\n"
-            "SQ010\n"
-            "  SH010\n"
-            "  SH020\n"
+            "SQ020: SH010\n"
         )
         self.seq_shot_edit.setMinimumHeight(140)
-        inputs_layout.addRow("Seq/Shots:", self.seq_shot_edit)
+        self.fill_example_btn = QPushButton("Fill Example")
+        seq_row.addWidget(self.seq_shot_edit, 1)
+        seq_row.addWidget(self.fill_example_btn)
+        inputs_layout.addRow("Seq/Shots:", seq_row)
 
         # Options
         flags_row = QHBoxLayout()
@@ -130,13 +151,20 @@ class MainWindow(QMainWindow):
         btn_row = QHBoxLayout()
         self.preview_btn = QPushButton("Preview Plan")
         self.build_btn = QPushButton("Build")
-        self.build_btn.setEnabled(False)  # enabled after preview
+        self.build_btn.setEnabled(False)
         btn_row.addWidget(self.preview_btn)
         btn_row.addWidget(self.build_btn)
         btn_row.addStretch(1)
         root_layout.addLayout(btn_row)
 
-        # Output
+        # ---- Template preview panel
+        root_layout.addWidget(QLabel("Template Preview"))
+        self.template_preview = QTextEdit()
+        self.template_preview.setReadOnly(True)
+        self.template_preview.setMinimumHeight(180)
+        root_layout.addWidget(self.template_preview)
+
+        # ---- Output panel
         root_layout.addWidget(QLabel("Output"))
         self.output = QTextEdit()
         self.output.setReadOnly(True)
@@ -145,14 +173,22 @@ class MainWindow(QMainWindow):
 
     def _wire_signals(self) -> None:
         self.root_browse_btn.clicked.connect(self._pick_root_dir)
+
         self.preview_btn.clicked.connect(self._on_preview_clicked)
         self.build_btn.clicked.connect(self._on_build_clicked)
+        self.open_project_btn.clicked.connect(self._open_project_folder)
 
         self.project_edit.textChanged.connect(self._on_project_changed)
         self.template_combo.currentIndexChanged.connect(self._on_template_changed)
 
         self.reload_templates_btn.clicked.connect(self._reload_templates)
         self.show_template_errors_btn.clicked.connect(self._show_template_errors_dialog)
+
+        self.profile_vfx_btn.clicked.connect(lambda: self._select_profile("vfx"))
+        self.profile_game_btn.clicked.connect(lambda: self._select_profile("game"))
+        self.profile_anim_btn.clicked.connect(lambda: self._select_profile("animation"))
+
+        self.fill_example_btn.clicked.connect(self._fill_example)
 
     # ---------------- Templates ----------------
 
@@ -169,12 +205,14 @@ class MainWindow(QMainWindow):
         if not self._templates:
             self.template_combo.addItem("No valid templates found", None)
             self._state.template = None
+            self.template_preview.setPlainText("")
         else:
             for t in self._templates:
                 label = f"{t.name}  (v{t.version})"
                 self.template_combo.addItem(label, t.template_id)
             self.template_combo.setCurrentIndex(0)
             self._state.template = self._templates[0]
+            self._refresh_template_preview()
 
         if problem_count > 0:
             self.template_warning_label.setText(f"{problem_count} template file(s) have errors and were skipped.")
@@ -187,12 +225,21 @@ class MainWindow(QMainWindow):
 
         # reset plan/build
         self._last_plan = []
+        self._last_sequences = {}
         self.build_btn.setEnabled(False)
+        self.open_project_btn.setEnabled(False)
 
         self._log(f"Templates dir: {self._templates_dir}")
         self._log(f"Loaded {len(self._templates)} valid template(s). Skipped {problem_count} file(s).")
         if self._state.template:
             self._log(f"Selected template: {self._state.template.name} (v{self._state.template.version})")
+
+    def _refresh_template_preview(self) -> None:
+        t = self._state.template
+        if not t:
+            self.template_preview.setPlainText("")
+            return
+        self.template_preview.setPlainText(format_template_preview(t.raw))
 
     def _show_template_errors_dialog(self) -> None:
         if not self._last_load:
@@ -220,15 +267,42 @@ class MainWindow(QMainWindow):
     def _on_template_changed(self, idx: int) -> None:
         if idx < 0 or not self._templates:
             self._state.template = None
+            self._refresh_template_preview()
             return
         template_id = self.template_combo.itemData(idx)
         match = next((t for t in self._templates if t.template_id == template_id), None)
         self._state.template = match
         if match:
             self._log(f"Selected template: {match.name} (v{match.version})")
-        # template change invalidates plan
+        self._refresh_template_preview()
+
+        # changing template invalidates plan
         self._last_plan = []
+        self._last_sequences = {}
         self.build_btn.setEnabled(False)
+
+    def _select_profile(self, keyword: str) -> None:
+        """
+        Selects the first template where either:
+          - filename contains keyword, OR
+          - name contains keyword
+        """
+        keyword = keyword.lower().strip()
+        if not self._templates:
+            return
+
+        best_idx = None
+        for i, t in enumerate(self._templates):
+            if keyword in t.template_id.lower() or keyword in t.name.lower():
+                best_idx = i
+                break
+
+        if best_idx is None:
+            self._log(f"?No template matched profile '{keyword}'.")
+            return
+
+        self.template_combo.setCurrentIndex(best_idx)
+        self._log(f"Profile selected: {keyword}")
 
     # ---------------- State ----------------
 
@@ -240,15 +314,25 @@ class MainWindow(QMainWindow):
         self._state.root_dir = Path(picked)
         self.root_path_edit.setText(picked)
         self._log(f"Root set to: {picked}")
-        # root change invalidates plan
-        self._last_plan = []
-        self.build_btn.setEnabled(False)
+
+        self._invalidate_plan()
 
     def _on_project_changed(self, text: str) -> None:
         self._state.project_name = text.strip()
-        # project change invalidates plan
+        self._invalidate_plan()
+
+    def _invalidate_plan(self) -> None:
         self._last_plan = []
+        self._last_sequences = {}
         self.build_btn.setEnabled(False)
+        self.open_project_btn.setEnabled(False)
+
+    def _fill_example(self) -> None:
+        self.seq_shot_edit.setPlainText(
+            "SQ010: SH010, SH020, SH030\n"
+            "SQ020: SH010\n"
+        )
+        self._log("Inserted example Seq/Shots input.")
 
     # ---------------- Actions ----------------
 
@@ -273,8 +357,7 @@ class MainWindow(QMainWindow):
             self._log("Cannot preview - fix the following:")
             for e in errors:
                 self._log(f"  - {e}")
-            self._last_plan = []
-            self.build_btn.setEnabled(False)
+            self._invalidate_plan()
             return
 
         t = self._state.template
@@ -288,10 +371,16 @@ class MainWindow(QMainWindow):
             sequences=parsed.sequences,
         )
         self._last_plan = plan
+        self._last_sequences = parsed.sequences
+
         self.build_btn.setEnabled(True)
 
-        self._log("Preview Plan (Day 4)")
-        self._log(f"Project path: {(root_dir / self._state.project_name).as_posix()}")
+        # Open Project Folder button becomes available after preview
+        project_root = root_dir / self._state.project_name
+        self.open_project_btn.setEnabled(project_root.exists() or True)
+
+        self._log("Preview Plan (Day 6)")
+        self._log(f"Project path: {project_root.as_posix()}")
         self._log(f"Template: {t.name} (v{t.version})")
         self._log(f"Sequences: {len(parsed.sequences)} | Shots: {sum(len(v) for v in parsed.sequences.values())}")
         self._log("")
@@ -317,7 +406,10 @@ class MainWindow(QMainWindow):
 
         result = builder.execute(self._last_plan)
 
-        # Write project-wide manifest
+        self._log("")
+        self._log(format_build_summary(result))
+
+        # Manifest
         root_dir = self._state.root_dir
         t = self._state.template
         if root_dir and t:
@@ -332,28 +424,25 @@ class MainWindow(QMainWindow):
             )
             manifest_path = write_manifest(rec)
             self._log(f"Manifest written: {manifest_path.as_posix()}")
-        else:
-            self._log("Manifest not written (missing root/template).")
-
-        self._log("")
-        self._log(format_build_summary(result))
-
-        if result.errors:
-            self._log("Errors:")
-            for action, err in result.error_items[:25]:
-                self._log(f"  - {action.type.value}: {action.path.as_posix()} -> {err}")
-            if len(result.error_items) > 25:
-                self._log(f"  ...and {len(result.error_items) - 25} more")
-
-        if result.skipped:
-            self._log("Skipped (already existed, overwrite OFF):")
-            for action in result.skipped_items[:25]:
-                self._log(f"  - {action.type.value}: {action.path.as_posix()}")
-            if len(result.skipped_items) > 25:
-                self._log(f"  ...and {len(result.skipped_items) - 25} more")
 
         self._log("Build finished.")
-        self._log("Day 5 will write a manifest.json and richer reporting.")
+
+    def _open_project_folder(self) -> None:
+        root_text = self.root_path_edit.text().strip()
+        if not root_text:
+            return
+        root_dir = Path(root_text)
+        project = self.project_edit.text().strip()
+        if not project:
+            return
+
+        project_root = root_dir / project
+        try:
+            project_root.mkdir(parents=True, exist_ok=True)
+            open_in_file_explorer(project_root)
+            self._log(f"Opened: {project_root.as_posix()}")
+        except Exception as exc:
+            QMessageBox.warning(self, "Open Folder Failed", str(exc))
 
     # ---------------- Logging ----------------
 

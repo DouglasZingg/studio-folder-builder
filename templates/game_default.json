@@ -1,0 +1,24 @@
+{
+  "name": "Game Default",
+  "version": "1.0",
+  "project_folders": [
+    "assets",
+    "scenes",
+    "source",
+    "build",
+    "tools",
+    "docs"
+  ],
+  "shot_tree": {
+    "work": [ "maya", "max", "houdini", "unreal" ],
+    "publish": [ "usd", "caches", "images" ],
+    "docs": [ "notes.md", "manifest.json" ]
+  },
+  "asset_tree": {
+    "characters": [ "work", "publish", "textures", "rig", "anim", "groom" ],
+    "props": [ "work", "publish", "textures" ],
+    "environments": [ "work", "publish", "textures", "setdress" ],
+    "fx": [ "work", "publish", "caches" ],
+    "materials": [ "work", "publish" ]
+  }
+}

@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from builder.core.template_schema import TemplateIssue, validate_template
+
 
 @dataclass(frozen=True)
 class TemplateInfo:
@@ -15,13 +17,13 @@ class TemplateInfo:
     raw: dict[str, Any]       # full loaded json
 
 
-class TemplateError(Exception):
-    pass
+@dataclass(frozen=True)
+class TemplateLoadResult:
+    templates: list[TemplateInfo]
+    problems: dict[str, list[TemplateIssue]]  # filename -> issues
 
 
 class TemplateLoader:
-    REQUIRED_KEYS = ("name", "version", "project_folders", "shot_tree", "asset_tree")
-
     def __init__(self, templates_dir: Path):
         self.templates_dir = templates_dir
 
@@ -30,58 +32,45 @@ class TemplateLoader:
             return []
         return sorted(self.templates_dir.glob("*.json"))
 
-    def load_all(self) -> tuple[list[TemplateInfo], list[str]]:
+    def load_all(self) -> TemplateLoadResult:
         templates: list[TemplateInfo] = []
-        errors: list[str] = []
+        problems: dict[str, list[TemplateIssue]] = {}
 
         for path in self.discover():
+            file_key = path.name
             try:
-                info = self.load_one(path)
-                templates.append(info)
+                data = self._read_json(path)
             except Exception as exc:
-                errors.append(f"{path.name}: {exc}")
+                problems[file_key] = [TemplateIssue("LOAD_FAIL", str(exc))]
+                continue
 
-        return templates, errors
+            issues = validate_template(data)
+            if issues:
+                problems[file_key] = issues
+                continue
 
-    def load_one(self, path: Path) -> TemplateInfo:
-        data = self._read_json(path)
-        self._validate(data, path)
+            template_id = path.stem
+            templates.append(
+                TemplateInfo(
+                    template_id=template_id,
+                    name=str(data["name"]),
+                    version=str(data["version"]),
+                    path=path,
+                    raw=data,
+                )
+            )
 
-        template_id = path.stem
-        name = str(data.get("name", template_id))
-        version = str(data.get("version", "0.0"))
-
-        return TemplateInfo(
-            template_id=template_id,
-            name=name,
-            version=version,
-            path=path,
-            raw=data,
-        )
+        # Sort templates by display name for nicer UX
+        templates.sort(key=lambda t: (t.name.lower(), t.template_id.lower()))
+        return TemplateLoadResult(templates=templates, problems=problems)
 
     def _read_json(self, path: Path) -> dict[str, Any]:
+        text = path.read_text(encoding="utf-8")
         try:
-            text = path.read_text(encoding="utf-8")
             obj = json.loads(text)
         except json.JSONDecodeError as e:
-            raise TemplateError(f"Invalid JSON (line {e.lineno}, col {e.colno})") from e
-        except OSError as e:
-            raise TemplateError(f"Could not read file: {e}") from e
+            raise ValueError(f"Invalid JSON (line {e.lineno}, col {e.colno})") from e
 
         if not isinstance(obj, dict):
-            raise TemplateError("Template root must be a JSON object")
+            raise ValueError("Template root must be a JSON object")
         return obj
-
-    def _validate(self, data: dict[str, Any], path: Path) -> None:
-        missing = [k for k in self.REQUIRED_KEYS if k not in data]
-        if missing:
-            raise TemplateError(f"Missing required keys: {', '.join(missing)}")
-
-        if not isinstance(data["project_folders"], list):
-            raise TemplateError("'project_folders' must be a list")
-
-        if not isinstance(data["shot_tree"], dict):
-            raise TemplateError("'shot_tree' must be an object/dict")
-
-        if not isinstance(data["asset_tree"], dict):
-            raise TemplateError("'asset_tree' must be an object/dict")

@@ -14,13 +14,16 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from builder.core.template_loader import TemplateInfo, TemplateLoader
+from builder.core.template_loader import TemplateInfo, TemplateLoader, TemplateLoadResult
+from builder.core.planner import plan_shot_build
+from builder.util.parse_input import parse_sequences_and_shots
 
 
 @dataclass
@@ -34,17 +37,18 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Studio Folder Builder")
-        self.resize(980, 640)
+        self.resize(1020, 760)
 
         self._state = UiState()
         self._templates: list[TemplateInfo] = []
+        self._last_load: TemplateLoadResult | None = None
 
         self._templates_dir = Path(__file__).resolve().parents[2] / "templates"
         self._loader = TemplateLoader(self._templates_dir)
 
         self._build_ui()
         self._wire_signals()
-        self._load_templates_into_dropdown()
+        self._reload_templates()
 
     # ---------------- UI ----------------
 
@@ -54,14 +58,13 @@ class MainWindow(QMainWindow):
 
         root_layout = QVBoxLayout(central)
 
-        # Top: Inputs
         inputs_group = QGroupBox("Job Setup")
         root_layout.addWidget(inputs_group)
 
         inputs_layout = QFormLayout(inputs_group)
         inputs_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        # Root picker row
+        # Root picker
         root_row = QHBoxLayout()
         self.root_path_edit = QLineEdit()
         self.root_path_edit.setPlaceholderText("Choose a root directory (e.g., D:/shows)")
@@ -70,17 +73,46 @@ class MainWindow(QMainWindow):
         root_row.addWidget(self.root_browse_btn)
         inputs_layout.addRow("Root:", root_row)
 
-        # Template dropdown
+        # Template row
+        template_row = QHBoxLayout()
         self.template_combo = QComboBox()
         self.template_combo.setMinimumWidth(340)
-        inputs_layout.addRow("Template:", self.template_combo)
+        self.reload_templates_btn = QPushButton("Reload Templates")
+        template_row.addWidget(self.template_combo, 1)
+        template_row.addWidget(self.reload_templates_btn)
+        inputs_layout.addRow("Template:", template_row)
+
+        # Template warnings
+        warn_row = QHBoxLayout()
+        self.template_warning_label = QLabel("")
+        self.template_warning_label.setWordWrap(True)
+        self.template_warning_label.setStyleSheet("color: #b36b00;")
+        self.show_template_errors_btn = QPushButton("Show Template Errors...")
+        self.show_template_errors_btn.setEnabled(False)
+        warn_row.addWidget(self.template_warning_label, 1)
+        warn_row.addWidget(self.show_template_errors_btn)
+        inputs_layout.addRow("Templates:", warn_row)
 
         # Project name
         self.project_edit = QLineEdit()
         self.project_edit.setPlaceholderText("MyShow")
         inputs_layout.addRow("Project:", self.project_edit)
 
-        # Safe mode / overwrite (placeholder behavior for Day 1)
+        # Sequences/Shots input
+        self.seq_shot_edit = QTextEdit()
+        self.seq_shot_edit.setPlaceholderText(
+            "Sequences/Shots (examples):\n"
+            "SQ010: SH010, SH020, SH030\n"
+            "SQ020: SH010\n\n"
+            "OR:\n"
+            "SQ010\n"
+            "  SH010\n"
+            "  SH020\n"
+        )
+        self.seq_shot_edit.setMinimumHeight(140)
+        inputs_layout.addRow("Seq/Shots:", self.seq_shot_edit)
+
+        # Options (overwrite later used on Day 4 builder)
         flags_row = QHBoxLayout()
         self.overwrite_checkbox = QCheckBox("Allow overwrite (unsafe)")
         self.overwrite_checkbox.setChecked(False)
@@ -88,21 +120,21 @@ class MainWindow(QMainWindow):
         flags_row.addStretch(1)
         inputs_layout.addRow("Options:", flags_row)
 
-        # Buttons row
+        # Buttons
         btn_row = QHBoxLayout()
         self.preview_btn = QPushButton("Preview Plan")
-        self.build_btn = QPushButton("Build (disabled Day 1)")
-        self.build_btn.setEnabled(False)  # Day 1 only
+        self.build_btn = QPushButton("Build (Day 4)")
+        self.build_btn.setEnabled(False)  # still disabled; Day 4
         btn_row.addWidget(self.preview_btn)
         btn_row.addWidget(self.build_btn)
         btn_row.addStretch(1)
         root_layout.addLayout(btn_row)
 
-        # Bottom: Log / Output
+        # Output
+        root_layout.addWidget(QLabel("Output"))
         self.output = QTextEdit()
         self.output.setReadOnly(True)
-        self.output.setPlaceholderText("Preview output will appear here...")
-        root_layout.addWidget(QLabel("Output"))
+        self.output.setPlaceholderText("Logs and preview output will appear here...")
         root_layout.addWidget(self.output, 1)
 
     def _wire_signals(self) -> None:
@@ -110,45 +142,79 @@ class MainWindow(QMainWindow):
         self.preview_btn.clicked.connect(self._on_preview_clicked)
         self.project_edit.textChanged.connect(self._on_project_changed)
         self.template_combo.currentIndexChanged.connect(self._on_template_changed)
+        self.reload_templates_btn.clicked.connect(self._reload_templates)
+        self.show_template_errors_btn.clicked.connect(self._show_template_errors_dialog)
 
-    # ---------------- Template loading ----------------
+    # ---------------- Templates ----------------
 
-    def _load_templates_into_dropdown(self) -> None:
+    def _reload_templates(self) -> None:
+        self.template_combo.blockSignals(True)
         self.template_combo.clear()
-        self._templates, errors = self._loader.load_all()
 
-        if errors:
-            self._log("Template load warnings:")
-            for e in errors:
-                self._log(f"  - {e}")
+        self._last_load = self._loader.load_all()
+        self._templates = self._last_load.templates
+
+        problems = self._last_load.problems
+        problem_count = len(problems)
 
         if not self._templates:
-            self.template_combo.addItem("No templates found (add JSON to /templates)", None)
+            self.template_combo.addItem("No valid templates found", None)
             self._state.template = None
-            self._log(f"No templates discovered in: {self._templates_dir}")
+        else:
+            for t in self._templates:
+                label = f"{t.name}  (v{t.version})"
+                self.template_combo.addItem(label, t.template_id)
+            self.template_combo.setCurrentIndex(0)
+            self._state.template = self._templates[0]
+
+        if problem_count > 0:
+            self.template_warning_label.setText(f"{problem_count} template file(s) have errors and were skipped.")
+            self.show_template_errors_btn.setEnabled(True)
+        else:
+            self.template_warning_label.setText("All templates loaded successfully.")
+            self.show_template_errors_btn.setEnabled(False)
+
+        self.template_combo.blockSignals(False)
+
+        self._log(f"Templates dir: {self._templates_dir}")
+        self._log(f"Loaded {len(self._templates)} valid template(s). Skipped {problem_count} file(s).")
+        if self._state.template:
+            self._log(f"Selected template: {self._state.template.name} (v{self._state.template.version})")
+
+    def _show_template_errors_dialog(self) -> None:
+        if not self._last_load:
+            return
+        problems = self._last_load.problems
+        if not problems:
+            QMessageBox.information(self, "Template Errors", "No template errors.")
             return
 
-        for t in self._templates:
-            label = f"{t.name}  (v{t.version})"
-            self.template_combo.addItem(label, t.template_id)
+        lines: list[str] = []
+        for filename, issues in problems.items():
+            lines.append(f"{filename}")
+            for issue in issues:
+                lines.append(f"  - {issue.pretty()}")
+            lines.append("")
+        msg = "\n".join(lines).strip()
 
-        # select first template by default
-        self.template_combo.setCurrentIndex(0)
-        self._state.template = self._templates[0]
-        self._log(f"Loaded {len(self._templates)} template(s) from {self._templates_dir}")
+        box = QMessageBox(self)
+        box.setWindowTitle("Template Errors")
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setText("Some templates could not be loaded and were skipped.")
+        box.setDetailedText(msg)
+        box.exec()
 
     def _on_template_changed(self, idx: int) -> None:
         if idx < 0 or not self._templates:
             self._state.template = None
             return
-
         template_id = self.template_combo.itemData(idx)
         match = next((t for t in self._templates if t.template_id == template_id), None)
         self._state.template = match
         if match:
             self._log(f"Selected template: {match.name} (v{match.version})")
 
-    # ---------------- State changes ----------------
+    # ---------------- State ----------------
 
     def _pick_root_dir(self) -> None:
         start_dir = str(self._state.root_dir) if self._state.root_dir else str(Path.home())
@@ -165,7 +231,6 @@ class MainWindow(QMainWindow):
     # ---------------- Actions ----------------
 
     def _on_preview_clicked(self) -> None:
-        # Day 1: placeholder “plan” — just validates inputs and logs intent.
         root_text = self.root_path_edit.text().strip()
         root_dir = Path(root_text) if root_text else None
         self._state.root_dir = root_dir
@@ -176,7 +241,11 @@ class MainWindow(QMainWindow):
         if not self._state.project_name:
             errors.append("Project name is required.")
         if not self._state.template:
-            errors.append("A template must be selected.")
+            errors.append("A valid template must be selected.")
+
+        parsed = parse_sequences_and_shots(self.seq_shot_edit.toPlainText())
+        if not parsed.sequences:
+            errors.append("Seq/Shots input is required (at least one sequence with shots).")
 
         if errors:
             self._log("X Cannot preview - fix the following:")
@@ -186,15 +255,27 @@ class MainWindow(QMainWindow):
 
         t = self._state.template
         assert t is not None
+        assert root_dir is not None
 
-        project_path = root_dir / self._state.project_name
-        self._log("Preview (Day 1 placeholder)")
-        self._log(f"Root:    {root_dir}")
-        self._log(f"Project: {self._state.project_name}")
-        self._log(f"Path:    {project_path}")
-        self._log(f"Template:{t.name} (v{t.version})")
+        plan = plan_shot_build(
+            root=root_dir,
+            project=self._state.project_name,
+            template_raw=t.raw,
+            sequences=parsed.sequences,
+        )
+
+        self._log("Preview Plan (Day 3)")
+        self._log(f"Project path: {(root_dir / self._state.project_name).as_posix()}")
+        self._log(f"Template: {t.name} (v{t.version})")
+        self._log(f"Sequences: {len(parsed.sequences)} | Shots: {sum(len(v) for v in parsed.sequences.values())}")
         self._log("")
-        self._log("Next (Day 3) the preview will list every folder/file to be created.")
+
+        for action in plan:
+            self._log(action.pretty())
+
+        self._log("")
+        self._log(f"Plan totals - folders/files: {len(plan)} (deduped).")
+        self._log("Day 4 will execute this plan on disk (safe mode + overwrite option).")
 
     # ---------------- Logging ----------------
 

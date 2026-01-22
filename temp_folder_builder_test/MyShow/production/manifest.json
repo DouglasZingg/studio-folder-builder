@@ -1,168 +1,236 @@
 {
   "tool": "Studio Folder Builder",
-  "template": "VFX Default",
+  "template": "Animation Default",
   "template_version": "1.0",
-  "timestamp": "2026-01-22T02:37:25+00:00",
+  "timestamp": "2026-01-22T03:14:37+00:00",
   "root": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test",
   "project": "MyShow",
   "overwrite": false,
-  "sequences": {},
+  "mode": "assets",
+  "sequences": null,
+  "assets": {
+    "characters": [
+      "Hero",
+      "Villain"
+    ],
+    "props": [
+      "Sword",
+      "Shield"
+    ],
+    "environments": [
+      "City"
+    ]
+  },
   "results": {
-    "created_dirs": 23,
-    "created_files": 2,
-    "skipped": 0,
+    "created_dirs": 27,
+    "created_files": 0,
+    "skipped": 7,
     "errors": 0
   },
   "actions": [
     {
       "type": "dir",
       "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets",
+      "status": "skipped",
+      "message": "Directory already exists"
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/characters",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/characters/Hero",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/characters/Hero/groom",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/characters/Hero/model",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/characters/Hero/rig",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/characters/Hero/surfacing",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/characters/Hero/textures",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/characters/Villain",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/characters/Villain/groom",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/characters/Villain/model",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/characters/Villain/rig",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/characters/Villain/surfacing",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/characters/Villain/textures",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/environments",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/environments/City",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/environments/City/model",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/environments/City/surfacing",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/environments/City/textures",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/props",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/props/Shield",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/props/Shield/model",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/props/Shield/surfacing",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/props/Shield/textures",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/props/Sword",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/props/Sword/model",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/props/Sword/surfacing",
+      "status": "created",
+      "message": null
+    },
+    {
+      "type": "dir",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/assets/props/Sword/textures",
       "status": "created",
       "message": null
     },
     {
       "type": "dir",
       "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/delivery",
-      "status": "created",
-      "message": null
+      "status": "skipped",
+      "message": "Directory already exists"
     },
     {
       "type": "dir",
       "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/editorial",
-      "status": "created",
-      "message": null
+      "status": "skipped",
+      "message": "Directory already exists"
     },
     {
       "type": "dir",
       "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/production",
-      "status": "created",
-      "message": null
+      "status": "skipped",
+      "message": "Directory already exists"
     },
     {
       "type": "dir",
       "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences",
-      "status": "created",
-      "message": null
+      "status": "skipped",
+      "message": "Directory already exists"
     },
     {
       "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/comp",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/docs",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/plates",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/publish",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/publish/caches",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/publish/images",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/publish/usd",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/reference",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/renders",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/work",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/work/houdini",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/work/max",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/work/maya",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/work/nuke",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "dir",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/work/unreal",
-      "status": "created",
-      "message": null
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/shots",
+      "status": "skipped",
+      "message": "Directory already exists"
     },
     {
       "type": "dir",
       "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/tools",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "file",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/docs/manifest.json",
-      "status": "created",
-      "message": null
-    },
-    {
-      "type": "file",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/sequences/SQ010/SH010/docs/notes.md",
-      "status": "created",
-      "message": null
+      "status": "skipped",
+      "message": "Directory already exists"
     }
   ],
   "manifest_path": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test/MyShow/production/manifest.json"

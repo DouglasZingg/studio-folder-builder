@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Iterable, List, Tuple
+from typing import Any, Iterable, Tuple
 
 from builder.models import PlanAction, PlanActionType
 from builder.core.template_schema import is_starter_file
 
+
+# ---------------- SHOTS MODE ----------------
 
 def plan_shot_build(
     root: Path,
@@ -13,24 +15,16 @@ def plan_shot_build(
     template_raw: dict[str, Any],
     sequences: dict[str, list[str]],
 ) -> list[PlanAction]:
-    """
-    Builds a flat plan of folders/files for:
-      root/project/sequences/<SEQ>/<SHOT>/<shot_tree...>
-    plus top-level project_folders.
-    """
     project_root = root / project
     actions: list[PlanAction] = []
 
-    # top-level project folders
     for name in template_raw.get("project_folders", []):
         actions.append(PlanAction(PlanActionType.DIR, project_root / name))
 
-    # common containers (optional but typical)
     sequences_root = project_root / "sequences"
     actions.append(PlanAction(PlanActionType.DIR, sequences_root))
 
     shot_tree = template_raw.get("shot_tree", {})
-    # seq/shot paths
     for seq, shots in sequences.items():
         seq_root = sequences_root / seq
         actions.append(PlanAction(PlanActionType.DIR, seq_root))
@@ -38,18 +32,75 @@ def plan_shot_build(
         for shot in shots:
             shot_root = seq_root / shot
             actions.append(PlanAction(PlanActionType.DIR, shot_root))
-
             actions.extend(_expand_tree(shot_root, shot_tree))
 
     return _dedupe_sorted(actions)
 
 
+# ---------------- ASSETS MODE ----------------
+
+def plan_asset_build(
+    root: Path,
+    project: str,
+    template_raw: dict[str, Any],
+    assets: dict[str, list[str]],
+) -> list[PlanAction]:
+    """
+    Build plan:
+      root/project/assets/<category>/<asset_name>/<asset_tree[category]...>
+    If template.asset_tree[category] is a list[str], those are subfolders under asset root.
+    If it's a dict, it's treated like shot_tree (folder -> children list).
+    """
+    project_root = root / project
+    actions: list[PlanAction] = []
+
+    for name in template_raw.get("project_folders", []):
+        actions.append(PlanAction(PlanActionType.DIR, project_root / name))
+
+    assets_root = project_root / "assets"
+    actions.append(PlanAction(PlanActionType.DIR, assets_root))
+
+    asset_tree = template_raw.get("asset_tree", {})
+
+    for cat, names in assets.items():
+        cat_root = assets_root / cat
+        actions.append(PlanAction(PlanActionType.DIR, cat_root))
+
+        # category spec in template
+        spec = asset_tree.get(cat)
+
+        for asset_name in names:
+            asset_root = cat_root / asset_name
+            actions.append(PlanAction(PlanActionType.DIR, asset_root))
+
+            if isinstance(spec, list):
+                # list of folders under asset_root
+                for item in spec:
+                    if not isinstance(item, str) or not item.strip():
+                        continue
+                    p = asset_root / item
+                    if is_starter_file(item):
+                        actions.append(PlanAction(PlanActionType.FILE, p))
+                    else:
+                        actions.append(PlanAction(PlanActionType.DIR, p))
+
+            elif isinstance(spec, dict):
+                # nested dict like shot_tree: { work:[...], publish:[...] }
+                actions.extend(_expand_tree(asset_root, spec))
+
+            else:
+                # fallback if category not in template: create minimal structure
+                actions.append(PlanAction(PlanActionType.DIR, asset_root / "work"))
+                actions.append(PlanAction(PlanActionType.DIR, asset_root / "publish"))
+                actions.append(PlanAction(PlanActionType.DIR, asset_root / "docs"))
+                actions.append(PlanAction(PlanActionType.FILE, asset_root / "docs" / "notes.md"))
+
+    return _dedupe_sorted(actions)
+
+
+# ---------------- Shared helpers ----------------
+
 def _expand_tree(base: Path, tree: dict[str, Any]) -> list[PlanAction]:
-    """
-    Expand a dict tree:
-      { "work": ["maya","houdini"], "docs":["notes.md"] }
-    into plan actions under base.
-    """
     actions: list[PlanAction] = []
 
     for folder_name, children in tree.items():
@@ -57,7 +108,6 @@ def _expand_tree(base: Path, tree: dict[str, Any]) -> list[PlanAction]:
         actions.append(PlanAction(PlanActionType.DIR, node_path))
 
         if not isinstance(children, list):
-            # Day 3 assumes list children (validated by Day 2)
             continue
 
         for item in children:
@@ -73,8 +123,6 @@ def _expand_tree(base: Path, tree: dict[str, Any]) -> list[PlanAction]:
 
 
 def _dedupe_sorted(actions: Iterable[PlanAction]) -> list[PlanAction]:
-    # Deduplicate by (type, path) but keep deterministic order:
-    # sort by path, dirs before files within same path parent.
     seen: set[tuple[str, str]] = set()
     unique: list[PlanAction] = []
     for a in actions:
@@ -85,7 +133,6 @@ def _dedupe_sorted(actions: Iterable[PlanAction]) -> list[PlanAction]:
         unique.append(a)
 
     def sort_key(a: PlanAction) -> Tuple[str, int, str]:
-        # dirs first
         t = 0 if a.type == PlanActionType.DIR else 1
         return (str(a.path).lower(), t, a.type.value)
 

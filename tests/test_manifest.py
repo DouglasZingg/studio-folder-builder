@@ -31,9 +31,12 @@ def test_manifest_written(tmp_path: Path):
         template_name="VFX Default",
         template_version="1.0",
         template_raw=template,
+        mode="shots",
         sequences={"SQ010": ["SH010"]},
+        assets=None,
         result=result,
     )
+
 
     path = write_manifest(rec)
     assert path.is_file()

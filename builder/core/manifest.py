@@ -19,7 +19,11 @@ class ManifestRecord:
     root: str
     project: str
     overwrite: bool
-    sequences: dict[str, list[str]]
+
+    mode: str  # "shots" or "assets"
+    sequences: dict[str, list[str]] | None
+    assets: dict[str, list[str]] | None
+
     results: dict[str, int]
     actions: list[dict[str, Any]]
     manifest_path: str
@@ -39,7 +43,7 @@ def determine_manifest_path(project_root: Path, template_raw: dict[str, Any]) ->
     prod = project_root / "production"
     tools = project_root / "tools"
 
-    # Prefer production (studio default). Create later if missing.
+    # Prefer production by default (studio-ish). If it doesn't exist yet, we create it when writing.
     return prod / "manifest.json" if True else (tools / "manifest.json" if tools.exists() else project_root / "manifest.json")
 
 
@@ -48,7 +52,9 @@ def build_manifest(
     template_name: str,
     template_version: str,
     template_raw: dict[str, Any],
-    sequences: dict[str, list[str]],
+    mode: str,
+    sequences: dict[str, list[str]] | None,
+    assets: dict[str, list[str]] | None,
     result: BuildResult,
 ) -> ManifestRecord:
     manifest_path = determine_manifest_path(project_root, template_raw)
@@ -72,7 +78,9 @@ def build_manifest(
         root=project_root.parent.as_posix(),
         project=project_root.name,
         overwrite=result.overwrite,
+        mode=mode,
         sequences=sequences,
+        assets=assets,
         results={
             "created_dirs": result.created_dirs,
             "created_files": result.created_files,

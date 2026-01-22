@@ -38,6 +38,9 @@ from builder.core.job_config import (
     read_job_config,
     config_to_text_for_ui,
 )
+from PySide6.QtCore import QObject, QThread, Signal
+from builder.integrations.flow_client import FlowClient, format_seq_shots_text
+from builder.integrations.flow_config import load_flow_credentials
 
 @dataclass
 class UiState:
@@ -45,6 +48,19 @@ class UiState:
     project_name: str = ""
     template: TemplateInfo | None = None
     mode: str = "shots"  # "shots" | "assets"
+
+class FlowWorker(QObject):
+    finished = Signal(dict)      # sequences dict
+    failed = Signal(str)
+
+    def run(self) -> None:
+        try:
+            creds = load_flow_credentials()
+            client = FlowClient(creds)
+            data = client.fetch_sequences_and_shots()
+            self.finished.emit(data)
+        except Exception as exc:
+            self.failed.emit(str(exc))
 
 
 class MainWindow(QMainWindow):
@@ -169,6 +185,12 @@ class MainWindow(QMainWindow):
         btn_row.addWidget(self.build_btn)
         btn_row.addStretch(1)
         root_layout.addLayout(btn_row)
+        flow_row = QHBoxLayout()
+        self.load_flow_btn = QPushButton("Load Seq/Shots from Flow/PT")
+        flow_row.addWidget(self.load_flow_btn)
+        flow_row.addStretch(1)
+        root_layout.addLayout(flow_row)
+
 
         # Config buttons
         cfg_row = QHBoxLayout()
@@ -210,6 +232,8 @@ class MainWindow(QMainWindow):
         self.save_config_btn.clicked.connect(self._on_save_config)
         self.load_config_btn.clicked.connect(self._on_load_config)
 
+        self.load_flow_btn.clicked.connect(self._on_load_flow_clicked)
+
     # ---------------- Mode ----------------
 
     def _on_mode_changed(self) -> None:
@@ -222,6 +246,7 @@ class MainWindow(QMainWindow):
         is_shots = self._state.mode == "shots"
         self.shots_row_widget.setVisible(is_shots)
         self.assets_row_widget.setVisible(not is_shots)
+        self.load_flow_btn.setEnabled(self._state.mode == "shots")
 
     # ---------------- Templates ----------------
 
@@ -547,3 +572,56 @@ class MainWindow(QMainWindow):
         self._invalidate_plan()
         self._log(f"Config loaded: {path_str}")
         self._log("Click Preview Plan to regenerate the plan from the loaded config.")
+
+    def _on_load_flow_clicked(self) -> None:
+        if self._state.mode != "shots":
+            QMessageBox.information(self, "Flow/PT", "Switch to Shots Mode to load sequences/shots from Flow/PT.")
+            return
+
+        # UI hint
+        self._log("Loading sequences/shots from Flow/PT...")
+
+        # Thread setup
+        self._flow_thread = QThread(self)  # keep refs on self to avoid GC
+        self._flow_worker = FlowWorker()
+        self._flow_worker.moveToThread(self._flow_thread)
+
+        self._flow_thread.started.connect(self._flow_worker.run)
+        self._flow_worker.finished.connect(self._on_flow_loaded)
+        self._flow_worker.failed.connect(self._on_flow_failed)
+
+        # Ensure cleanup
+        self._flow_worker.finished.connect(self._flow_thread.quit)
+        self._flow_worker.failed.connect(self._flow_thread.quit)
+        self._flow_thread.finished.connect(self._flow_worker.deleteLater)
+        self._flow_thread.finished.connect(self._flow_thread.deleteLater)
+
+        self._load_flow_btn_state(True)
+        self._flow_thread.start()
+
+
+    def _load_flow_btn_state(self, busy: bool) -> None:
+        self.load_flow_btn.setEnabled(not busy)
+        self.load_flow_btn.setText("Loading..." if busy else "Load Seq/Shots from Flow/PT")
+
+
+    def _on_flow_loaded(self, data: dict) -> None:
+        self._load_flow_btn_state(False)
+
+        if not data:
+            self._log("Flow/PT returned no sequences/shots (check project_id or permissions).")
+            return
+
+        # Fill the text box with formatted output
+        text = format_seq_shots_text(data)
+        self.seq_shot_edit.setPlainText(text)
+
+        # Invalidate plan; user should preview again
+        self._invalidate_plan()
+        self._log(f"Loaded from Flow/PT: {len(data)} sequence(s). Click Preview Plan.")
+
+
+    def _on_flow_failed(self, msg: str) -> None:
+        self._load_flow_btn_state(False)
+        QMessageBox.warning(self, "Flow/PT Load Failed", msg)
+        self._log(f"Flow/PT load failed: {msg}")

@@ -1,6 +1,6 @@
 {
-  "url": "https://zingg-entertainment.shotgrid.autodesk.com",
-  "script_name": "studio_folder_builder",
-  "script_key": "xoubuqzmq~noecpscg8mnAicj",
-  "project_id": 124
+  "url": "https://YOUR-WEBSITE.shotgrid.autodesk.com",
+  "script_name": "script_name",
+  "script_key": "API",
+  "project_id": 123
 }

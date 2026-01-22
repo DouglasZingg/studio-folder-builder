@@ -1,0 +1,20 @@
+{
+  "tool": "Studio Folder Builder",
+  "version": "0.8.0",
+  "timestamp": "2026-01-22T03:31:27+00:00",
+  "root": "C:/Users/dougl/OneDrive/Desktop/Projects/studio-folder-builder/temp_folder_builder_test",
+  "project": "MyProjects",
+  "template_id": "animation_default",
+  "mode": "shots",
+  "overwrite": false,
+  "sequences": {
+    "SQ010": [
+      "SH010",
+      "SH020"
+    ],
+    "SQ020": [
+      "SH010"
+    ]
+  },
+  "assets": null
+}

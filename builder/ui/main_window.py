@@ -31,7 +31,13 @@ from builder.util.parse_input import parse_sequences_and_shots
 from builder.util.parse_assets import parse_assets
 from builder.util.fs import open_in_file_explorer
 from builder.models import PlanAction
-
+from PySide6.QtWidgets import QDialog
+from builder.core.job_config import (
+    make_job_config,
+    write_job_config,
+    read_job_config,
+    config_to_text_for_ui,
+)
 
 @dataclass
 class UiState:
@@ -164,6 +170,15 @@ class MainWindow(QMainWindow):
         btn_row.addStretch(1)
         root_layout.addLayout(btn_row)
 
+        # Config buttons
+        cfg_row = QHBoxLayout()
+        self.save_config_btn = QPushButton("Save Config...")
+        self.load_config_btn = QPushButton("Load Config...")
+        cfg_row.addWidget(self.save_config_btn)
+        cfg_row.addWidget(self.load_config_btn)
+        cfg_row.addStretch(1)
+        root_layout.addLayout(cfg_row)
+
         # Template preview
         root_layout.addWidget(QLabel("Template Preview"))
         self.template_preview = QTextEdit()
@@ -191,6 +206,9 @@ class MainWindow(QMainWindow):
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self.fill_shots_example_btn.clicked.connect(self._fill_shots_example)
         self.fill_assets_example_btn.clicked.connect(self._fill_assets_example)
+
+        self.save_config_btn.clicked.connect(self._on_save_config)
+        self.load_config_btn.clicked.connect(self._on_load_config)
 
     # ---------------- Mode ----------------
 
@@ -425,3 +443,107 @@ class MainWindow(QMainWindow):
 
     def _log(self, msg: str) -> None:
         self.output.append(msg)
+
+    def _on_save_config(self) -> None:
+        root_text = self.root_path_edit.text().strip()
+        project = self.project_edit.text().strip()
+        t = self._state.template
+
+        if not root_text or not project or not t:
+            QMessageBox.warning(self, "Save Config", "Root, Project, and Template must be set before saving.")
+            return
+
+        root_dir = Path(root_text)
+        overwrite = self.overwrite_checkbox.isChecked()
+
+        # Determine payload based on mode
+        sequences = self._last_sequences if self._state.mode == "shots" else None
+        assets = self._last_assets if self._state.mode == "assets" else None
+
+        # If user hasn't previewed yet, parse directly from UI so save still works
+        if self._state.mode == "shots" and not sequences:
+            parsed = parse_sequences_and_shots(self.seq_shot_edit.toPlainText())
+            sequences = parsed.sequences if parsed.sequences else None
+
+        if self._state.mode == "assets" and not assets:
+            parsed = parse_assets(self.assets_edit.toPlainText())
+            assets = parsed.assets if parsed.assets else None
+
+        if self._state.mode == "shots" and not sequences:
+            QMessageBox.warning(self, "Save Config", "Shots mode requires at least one sequence with shots.")
+            return
+
+        if self._state.mode == "assets" and not assets:
+            QMessageBox.warning(self, "Save Config", "Assets mode requires at least one category with assets.")
+            return
+
+        cfg = make_job_config(
+            root=root_dir,
+            project=project,
+            template_id=t.template_id,
+            mode=self._state.mode,
+            overwrite=overwrite,
+            sequences=sequences,
+            assets=assets,
+        )
+
+        default_path = (root_dir / project / "production" / "job_config.json").as_posix()
+        path_str, _ = QFileDialog.getSaveFileName(self, "Save Job Config", default_path, "JSON Files (*.json)")
+        if not path_str:
+            return
+
+        try:
+            out_path = write_job_config(Path(path_str), cfg)
+            self._log(f"Config saved: {out_path.as_posix()}")
+        except Exception as exc:
+            QMessageBox.warning(self, "Save Config Failed", str(exc))
+
+
+    def _on_load_config(self) -> None:
+        path_str, _ = QFileDialog.getOpenFileName(self, "Load Job Config", "", "JSON Files (*.json)")
+        if not path_str:
+            return
+
+        try:
+            cfg = read_job_config(Path(path_str))
+        except Exception as exc:
+            QMessageBox.warning(self, "Load Config Failed", str(exc))
+            return
+
+        # Apply basic fields
+        self.root_path_edit.setText(cfg.root)
+        self.project_edit.setText(cfg.project)
+        self.overwrite_checkbox.setChecked(cfg.overwrite)
+
+        # Apply mode
+        self._state.mode = cfg.mode
+        idx = self.mode_combo.findData(cfg.mode)
+        if idx >= 0:
+            self.mode_combo.setCurrentIndex(idx)
+        self._apply_mode_visibility()
+
+        # Select template by template_id
+        if self._templates:
+            match_idx = None
+            for i, t in enumerate(self._templates):
+                if t.template_id == cfg.template_id:
+                    match_idx = i
+                    break
+            if match_idx is not None:
+                self.template_combo.setCurrentIndex(match_idx)
+
+        # Fill the correct multiline input
+        text = config_to_text_for_ui(cfg)
+        if cfg.mode == "shots":
+            self.seq_shot_edit.setPlainText(text)
+            self._last_sequences = cfg.sequences
+            self._last_assets = None
+        else:
+            self.assets_edit.setPlainText(text)
+            self._last_assets = cfg.assets
+            self._last_sequences = None
+
+        # Plan invalidated until preview is clicked
+        self._invalidate_plan()
+        self._log(f"Config loaded: {path_str}")
+        self._log("Click Preview Plan to regenerate the plan from the loaded config.")

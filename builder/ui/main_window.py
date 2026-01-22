@@ -23,7 +23,10 @@ from PySide6.QtWidgets import (
 
 from builder.core.template_loader import TemplateInfo, TemplateLoader, TemplateLoadResult
 from builder.core.planner import plan_shot_build
+from builder.core.builder import PlanBuilder
+from builder.core.reporting import format_build_summary
 from builder.util.parse_input import parse_sequences_and_shots
+from builder.models import PlanAction
 
 
 @dataclass
@@ -37,11 +40,13 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Studio Folder Builder")
-        self.resize(1020, 760)
+        self.resize(1020, 780)
 
         self._state = UiState()
         self._templates: list[TemplateInfo] = []
         self._last_load: TemplateLoadResult | None = None
+
+        self._last_plan: list[PlanAction] = []
 
         self._templates_dir = Path(__file__).resolve().parents[2] / "templates"
         self._loader = TemplateLoader(self._templates_dir)
@@ -112,7 +117,7 @@ class MainWindow(QMainWindow):
         self.seq_shot_edit.setMinimumHeight(140)
         inputs_layout.addRow("Seq/Shots:", self.seq_shot_edit)
 
-        # Options (overwrite later used on Day 4 builder)
+        # Options
         flags_row = QHBoxLayout()
         self.overwrite_checkbox = QCheckBox("Allow overwrite (unsafe)")
         self.overwrite_checkbox.setChecked(False)
@@ -123,8 +128,8 @@ class MainWindow(QMainWindow):
         # Buttons
         btn_row = QHBoxLayout()
         self.preview_btn = QPushButton("Preview Plan")
-        self.build_btn = QPushButton("Build (Day 4)")
-        self.build_btn.setEnabled(False)  # still disabled; Day 4
+        self.build_btn = QPushButton("Build")
+        self.build_btn.setEnabled(False)  # enabled after preview
         btn_row.addWidget(self.preview_btn)
         btn_row.addWidget(self.build_btn)
         btn_row.addStretch(1)
@@ -140,8 +145,11 @@ class MainWindow(QMainWindow):
     def _wire_signals(self) -> None:
         self.root_browse_btn.clicked.connect(self._pick_root_dir)
         self.preview_btn.clicked.connect(self._on_preview_clicked)
+        self.build_btn.clicked.connect(self._on_build_clicked)
+
         self.project_edit.textChanged.connect(self._on_project_changed)
         self.template_combo.currentIndexChanged.connect(self._on_template_changed)
+
         self.reload_templates_btn.clicked.connect(self._reload_templates)
         self.show_template_errors_btn.clicked.connect(self._show_template_errors_dialog)
 
@@ -175,6 +183,10 @@ class MainWindow(QMainWindow):
             self.show_template_errors_btn.setEnabled(False)
 
         self.template_combo.blockSignals(False)
+
+        # reset plan/build
+        self._last_plan = []
+        self.build_btn.setEnabled(False)
 
         self._log(f"Templates dir: {self._templates_dir}")
         self._log(f"Loaded {len(self._templates)} valid template(s). Skipped {problem_count} file(s).")
@@ -213,6 +225,9 @@ class MainWindow(QMainWindow):
         self._state.template = match
         if match:
             self._log(f"Selected template: {match.name} (v{match.version})")
+        # template change invalidates plan
+        self._last_plan = []
+        self.build_btn.setEnabled(False)
 
     # ---------------- State ----------------
 
@@ -224,9 +239,15 @@ class MainWindow(QMainWindow):
         self._state.root_dir = Path(picked)
         self.root_path_edit.setText(picked)
         self._log(f"Root set to: {picked}")
+        # root change invalidates plan
+        self._last_plan = []
+        self.build_btn.setEnabled(False)
 
     def _on_project_changed(self, text: str) -> None:
         self._state.project_name = text.strip()
+        # project change invalidates plan
+        self._last_plan = []
+        self.build_btn.setEnabled(False)
 
     # ---------------- Actions ----------------
 
@@ -248,9 +269,11 @@ class MainWindow(QMainWindow):
             errors.append("Seq/Shots input is required (at least one sequence with shots).")
 
         if errors:
-            self._log("X Cannot preview - fix the following:")
+            self._log("Cannot preview - fix the following:")
             for e in errors:
                 self._log(f"  - {e}")
+            self._last_plan = []
+            self.build_btn.setEnabled(False)
             return
 
         t = self._state.template
@@ -263,8 +286,10 @@ class MainWindow(QMainWindow):
             template_raw=t.raw,
             sequences=parsed.sequences,
         )
+        self._last_plan = plan
+        self.build_btn.setEnabled(True)
 
-        self._log("Preview Plan (Day 3)")
+        self._log("Preview Plan (Day 4)")
         self._log(f"Project path: {(root_dir / self._state.project_name).as_posix()}")
         self._log(f"Template: {t.name} (v{t.version})")
         self._log(f"Sequences: {len(parsed.sequences)} | Shots: {sum(len(v) for v in parsed.sequences.values())}")
@@ -275,7 +300,41 @@ class MainWindow(QMainWindow):
 
         self._log("")
         self._log(f"Plan totals - folders/files: {len(plan)} (deduped).")
-        self._log("Day 4 will execute this plan on disk (safe mode + overwrite option).")
+        self._log("Click Build to create this structure on disk.")
+
+    def _on_build_clicked(self) -> None:
+        if not self._last_plan:
+            self._log("No plan available. Click Preview Plan first.")
+            self.build_btn.setEnabled(False)
+            return
+
+        overwrite = self.overwrite_checkbox.isChecked()
+        builder = PlanBuilder(overwrite=overwrite)
+
+        self._log("")
+        self._log(f"Building... (overwrite={'ON' if overwrite else 'OFF'})")
+
+        result = builder.execute(self._last_plan)
+
+        self._log("")
+        self._log(format_build_summary(result))
+
+        if result.errors:
+            self._log("Errors:")
+            for action, err in result.error_items[:25]:
+                self._log(f"  - {action.type.value}: {action.path.as_posix()} -> {err}")
+            if len(result.error_items) > 25:
+                self._log(f"  ...and {len(result.error_items) - 25} more")
+
+        if result.skipped:
+            self._log("Skipped (already existed, overwrite OFF):")
+            for action in result.skipped_items[:25]:
+                self._log(f"  - {action.type.value}: {action.path.as_posix()}")
+            if len(result.skipped_items) > 25:
+                self._log(f"  ...and {len(result.skipped_items) - 25} more")
+
+        self._log("Build finished.")
+        self._log("Day 5 will write a manifest.json and richer reporting.")
 
     # ---------------- Logging ----------------
 

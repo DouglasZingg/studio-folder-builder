@@ -1,27 +1,25 @@
 # Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.pyd
 *.egg-info/
 dist/
 build/
 
-# Virtual envs
+# Virtual env
 .venv/
 venv/
+
+# IDE
+.vscode/
+.idea/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# IDE
-.vscode/
-.idea/
-.vs
-
-# Secrets / configs
+# Local secrets
 flow_config.json
 
-# Output
+# Logs
 *.log
